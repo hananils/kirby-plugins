@@ -1,0 +1,19 @@
+{
+    "name": "hananils/kirby-plugins",
+    "description": "Plugin manager for Kirby with autoload capacity",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "autoload": {
+        "psr-4": {
+            "Hananils\\Plugins\\": "lib/"
+        }
+    },
+    "authors": [
+        {
+            "name": "hana+nils · Büro für Gestaltung",
+            "email": "nils.hoerrmann@hananils.de"
+        }
+    ],
+    "require": {}
+}
