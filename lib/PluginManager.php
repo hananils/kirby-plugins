@@ -16,8 +16,11 @@ class PluginManager
     private string $name = '';
     private array $configuration = [];
 
-    public function __construct(string $id, string $root)
-    {
+    public function __construct(
+        string $id,
+        string $root,
+        Closure|array|string|null $license = null
+    ) {
         $this->id = $id;
         $this->root = $root;
         $this->manifest = $this->root . '/composer.json';
@@ -28,7 +31,8 @@ class PluginManager
             name: $this->name(),
             extends: $this->configuration(),
             root: $root,
-            version: $this->version()
+            version: $this->version(),
+            license: $license
         );
     }
 
