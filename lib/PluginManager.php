@@ -4,66 +4,108 @@ namespace Hananils\Plugins;
 
 use Kirby\Cms\App as Kirby;
 use Kirby\Data\Data;
-use Kirby\Data\Json;
+use Kirby\Plugin\Plugin;
+use SplFileInfo;
 
+/**
+ * Plugin Manager autoloads plugin configuration from the file system:
+ *
+ * translation: /translations/{code}.{php|json}
+ * blueprints: /blueprints/{name}.yml (including subfolders)
+ * snippets: /snippets/{name}.php (including subfolders)
+ * config: /config/{name}
+ * methods: /methods/{type}.php
+ */
 class PluginManager
 {
+    private string $vendor = 'hananils';
     private string $id;
     private string $root;
-    private string $manifest;
     private array $info;
-    private string $version = '';
     private string $name = '';
+    private string $version = '';
     private array $configuration = [];
+    private mixed $license = null;
 
-    public function __construct(
-        string $id,
-        string $root,
-        Closure|array|string|null $license = null
-    ) {
+    public function __construct(string $id, string $root, mixed $license = null)
+    {
         $this->id = $id;
         $this->root = $root;
-        $this->manifest = $this->root . '/composer.json';
-        $this->info = Data::read($this->manifest, fail: false);
+        $this->info = Data::read($this->root . '/composer.json', fail: false);
+        $this->license = $license;
+    }
 
-        // Initialize plugin
-        Kirby::plugin(
+    /**
+     * Shorthand to autoload plugin.
+     */
+    public static function autoload(string $id, string $root): Plugin
+    {
+        $manager = new self($id, $root);
+
+        return $manager->load();
+    }
+
+    /**
+     * Loads the plugin.
+     */
+    public function load(): Plugin|null
+    {
+        return Kirby::plugin(
+            root: $this->root,
             name: $this->name(),
             extends: $this->configuration(),
-            root: $root,
             version: $this->version(),
-            license: $license
+            license: $this->license()
         );
     }
 
-    public static function autoload(string $id, string $root)
-    {
-        return new self($id, $root);
-    }
-
-    public function name()
+    /**
+     * Returns the plugin name, adding the vendor prefix to the id, if missing.
+     */
+    public function name(): string
     {
         if ($this->name === '') {
             $this->name = $this->id;
 
             if (!str_contains($this->name, '/')) {
-                $this->name = 'hananils/' . $this->id;
+                $this->name = "$this->vendor/$this->id";
             }
         }
 
         return $this->name;
     }
 
-    public function version()
+    /**
+     * Returns the plugin version defined in composer.json.
+     */
+    public function version(): string
     {
         if ($this->version === '') {
-            $this->version = $this->info['version'] ?? '0.0.0dev';
+            $this->version = $this->info['version'] ?? '0.0.1dev';
         }
 
         return $this->version;
     }
 
-    public function configuration()
+    /**
+     * Returns the plugin license.
+     */
+    public function license(): mixed
+    {
+        if (
+            $this->license === null &&
+            array_key_exists('license', $this->info)
+        ) {
+            $this->license = $this->info['license'];
+        }
+
+        return $this->license;
+    }
+
+    /**
+     * Creates a configuration array by reading information from the file system.
+     */
+    public function configuration(): array
     {
         // Discover plugin configuration
         $this->discoverTranslations();
@@ -75,19 +117,22 @@ class PluginManager
         return array_filter($this->configuration);
     }
 
+    /**
+     * Discovers translations, either reading arrays from JSON or PHP files.
+     */
     private function discoverTranslations(): void
     {
         $path = $this->root . '/translations';
         $directory = new Discovery($path);
 
-        $this->ensureGroup('translations');
+        $this->ensureConfigurationGroup('translations');
 
         foreach ($directory as $file) {
             $name = $this->getName($file);
             $pathname = $file->getPathname();
 
             if ($file->getExtension() === 'json') {
-                $translations = Json::read($pathname);
+                $translations = Data::read($pathname, fail: false);
             } else {
                 $translations = require $pathname;
             }
@@ -96,13 +141,16 @@ class PluginManager
         }
     }
 
-    private function discoverReferences(string $group)
+    /**
+     * Discovers group references, mapping folders to paths.
+     */
+    private function discoverReferences(string $group): void
     {
         $path = $this->root . "/$group";
         $directory = new Discovery($path);
         $id = $this->id;
 
-        $this->ensureGroup($group);
+        $this->ensureConfigurationGroup($group);
 
         foreach ($directory as $file) {
             if ($file->isDir()) {
@@ -130,6 +178,9 @@ class PluginManager
         }
     }
 
+    /**
+     * Discovers group definitions, requiring files.
+     */
     private function discoverDefinitions(
         string $group,
         string $suffix = ''
@@ -148,14 +199,20 @@ class PluginManager
         }
     }
 
-    private function ensureGroup($group)
+    /**
+     * Ensures that the given group name is defined on the configuration object.
+     */
+    private function ensureConfigurationGroup(string $group): void
     {
         if (!isset($this->configuration[$group])) {
             $this->configuration[$group] = [];
         }
     }
 
-    private function getName($file)
+    /**
+     * Gets the file's basename without extension.
+     */
+    private function getName(SplFileInfo $file): string
     {
         return $file->getBasename('.' . $file->getExtension());
     }

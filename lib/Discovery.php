@@ -6,6 +6,10 @@ use ArrayIterator;
 use FilesystemIterator;
 use FilterIterator;
 
+/**
+ * Discovery iterates over PHP, YAML and JSON files in a given directory.
+ * It will not fail on non-existing paths and will fall back to an empty iterator.
+ */
 class Discovery extends FilterIterator
 {
     public function __construct($path)
@@ -24,6 +28,9 @@ class Discovery extends FilterIterator
         parent::__construct($iterator);
     }
 
+    /**
+     * Filters the files in the directory.
+     */
     public function accept(): bool
     {
         $file = $this->current();
